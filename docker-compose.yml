@@ -1,0 +1,103 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lab-postgres
+    environment:
+      POSTGRES_USER: lab
+      POSTGRES_PASSWORD: lab
+      POSTGRES_DB: bigdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./scripts/init-postgres.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lab -d bigdata"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: lab-clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8123/ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  clickhouse-init:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: lab-clickhouse-init
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    volumes:
+      - ./scripts/init-clickhouse.sql:/init.sql:ro
+    entrypoint:
+      [
+        "/bin/bash",
+        "-c",
+        "clickhouse-client --host clickhouse --multiquery < /init.sql && echo ClickHouse schema ready",
+      ]
+    restart: "no"
+
+  data-loader:
+    image: python:3.11-slim
+    container_name: lab-data-loader
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: bigdata
+      POSTGRES_USER: lab
+      POSTGRES_PASSWORD: lab
+      MOCK_DATA_DIR: /data/source
+    volumes:
+      - ./исходные данные:/data/source:ro
+      - ./scripts/load_mock_data.py:/scripts/load_mock_data.py:ro
+    working_dir: /scripts
+    command: >
+      bash -c "pip install -q pandas psycopg2-binary sqlalchemy &&
+               python load_mock_data.py"
+    restart: "no"
+
+  spark:
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+    container_name: lab-spark
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      clickhouse-init:
+        condition: service_completed_successfully
+      data-loader:
+        condition: service_completed_successfully
+    environment:
+      SPARK_MASTER: local[*]
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: bigdata
+      POSTGRES_USER: lab
+      POSTGRES_PASSWORD: lab
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "8123"
+      CLICKHOUSE_DB: lab
+      SPARK_JARS: /opt/spark/jars-extra/postgresql-42.7.3.jar,/opt/spark/jars-extra/clickhouse-jdbc-0.6.5-all.jar
+    volumes:
+      - ./spark:/opt/spark/work-dir
+    command: ["tail", "-f", "/dev/null"]
+
+volumes:
+  postgres_data:
+  clickhouse_data:
