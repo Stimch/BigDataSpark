@@ -2,11 +2,13 @@
 Построение 6 аналитических витрин из модели «звезда» (PostgreSQL) в ClickHouse.
 """
 
+import base64
 import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -93,20 +95,33 @@ def write_clickhouse(df, table: str) -> None:
     )
 
 
+def execute_clickhouse(sql: str) -> None:
+    """Выполнить DDL/DML в ClickHouse через HTTP POST (GET для TRUNCATE даёт 500)."""
+    url = f"http://{CLICKHOUSE_HOST}:{CLICKHOUSE_PORT}/"
+    body = urllib.parse.urlencode(
+        {"database": CLICKHOUSE_DB, "query": sql}
+    ).encode("utf-8")
+    credentials = base64.b64encode(
+        f"{CLICKHOUSE_USER}:{CLICKHOUSE_PASSWORD}".encode("ascii")
+    ).decode("ascii")
+    request = urllib.request.Request(url, data=body, method="POST")
+    request.add_header("Authorization", f"Basic {credentials}")
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:
+            response.read()
+    except urllib.error.HTTPError as exc:
+        details = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"ClickHouse HTTP {exc.code}: {details.strip()}\nQuery: {sql}"
+        ) from exc
+
+
 def truncate_clickhouse_table(table: str) -> None:
-    # Не использовать lab.table при database=lab в URL — иначе HTTP 500.
-    sql = f"TRUNCATE TABLE IF EXISTS {_table_name(table)}"
-    params = urllib.parse.urlencode(
-        {
-            "database": CLICKHOUSE_DB,
-            "query": sql,
-            "user": CLICKHOUSE_USER,
-            "password": CLICKHOUSE_PASSWORD,
-        }
+    name = _table_name(table)
+    # TRUNCATE через GET часто падает; ALTER DELETE стабильнее для MergeTree.
+    execute_clickhouse(
+        f"ALTER TABLE {name} DELETE WHERE 1 SETTINGS mutations_sync = 1"
     )
-    url = f"http://{CLICKHOUSE_HOST}:{CLICKHOUSE_PORT}/?{params}"
-    with urllib.request.urlopen(url, timeout=60) as response:
-        response.read()
 
 
 def build_product_mart(sales):
