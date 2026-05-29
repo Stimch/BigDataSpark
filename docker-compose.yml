@@ -20,6 +20,11 @@ services:
   clickhouse:
     image: clickhouse/clickhouse-server:24.8
     container_name: lab-clickhouse
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: lab
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
     ports:
       - "8123:8123"
       - "9000:9000"
@@ -37,13 +42,16 @@ services:
     depends_on:
       clickhouse:
         condition: service_healthy
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: lab
     volumes:
       - ./scripts/init-clickhouse.sql:/init.sql:ro
     entrypoint:
       [
         "/bin/bash",
         "-c",
-        "clickhouse-client --host clickhouse --multiquery < /init.sql && echo ClickHouse schema ready",
+        "clickhouse-client --host clickhouse --user \"$${CLICKHOUSE_USER}\" --password \"$${CLICKHOUSE_PASSWORD}\" --multiquery < /init.sql && echo ClickHouse schema ready",
       ]
     restart: "no"
 
@@ -93,6 +101,8 @@ services:
       CLICKHOUSE_HOST: clickhouse
       CLICKHOUSE_PORT: "8123"
       CLICKHOUSE_DB: lab
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: lab
       SPARK_JARS: /opt/spark/jars-extra/postgresql-42.7.3.jar,/opt/spark/jars-extra/clickhouse-jdbc-0.6.5-all.jar
     volumes:
       - ./spark:/opt/spark/work-dir

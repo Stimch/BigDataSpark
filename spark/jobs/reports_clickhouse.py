@@ -16,8 +16,10 @@ from pyspark.sql import functions as F
 from config import (
     CLICKHOUSE_DB,
     CLICKHOUSE_HOST,
+    CLICKHOUSE_PASSWORD,
     CLICKHOUSE_PROPERTIES,
     CLICKHOUSE_PORT,
+    CLICKHOUSE_USER,
     JDBC_CLICKHOUSE_URL,
     JDBC_POSTGRES_URL,
     POSTGRES_PROPERTIES,
@@ -88,10 +90,15 @@ def write_clickhouse(df, table: str) -> None:
 
 def truncate_clickhouse_table(table: str) -> None:
     sql = f"TRUNCATE TABLE IF EXISTS {table}"
-    url = (
-        f"http://{CLICKHOUSE_HOST}:{CLICKHOUSE_PORT}/"
-        f"?database={CLICKHOUSE_DB}&query={urllib.parse.quote(sql)}"
+    params = urllib.parse.urlencode(
+        {
+            "database": CLICKHOUSE_DB,
+            "query": sql,
+            "user": CLICKHOUSE_USER,
+            "password": CLICKHOUSE_PASSWORD,
+        }
     )
+    url = f"http://{CLICKHOUSE_HOST}:{CLICKHOUSE_PORT}/?{params}"
     with urllib.request.urlopen(url, timeout=60) as response:
         response.read()
 

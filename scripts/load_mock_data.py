@@ -58,9 +58,14 @@ def main() -> None:
         print(f"No CSV files found in {DATA_DIR}", file=sys.stderr)
         sys.exit(1)
 
-    frames = [pd.read_csv(path) for path in csv_files]
+    # В каждом CSV id идут с 1 — при склейке 10 файлов делаем уникальные id (1..10000)
+    frames = []
+    for file_index, path in enumerate(csv_files):
+        part = pd.read_csv(path)
+        part["id"] = part["id"] + file_index * 1000
+        frames.append(part)
     df = pd.concat(frames, ignore_index=True)
-    print(f"Loaded {len(df)} rows from {len(csv_files)} files")
+    print(f"Loaded {len(df)} rows from {len(csv_files)} files (unique id: 1..{len(df)})")
 
     engine = create_engine(
         f"postgresql+psycopg2://{PG_USER}:{PG_PASSWORD}@{PG_HOST}:{PG_PORT}/{PG_DB}"

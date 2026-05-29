@@ -139,6 +139,19 @@ docker compose down
 docker compose down -v
 ```
 
+## Частые ошибки
+
+**ClickHouse: `Authentication failed`** — том ClickHouse создан со случайным паролем. Сбросьте тома и поднимите заново:
+
+```bash
+docker compose down -v
+./scripts/run-pipeline.sh
+```
+
+Пароль в проекте: пользователь `default`, пароль `lab`.
+
+**PostgreSQL: `duplicate key value violates unique constraint "mock_data_pkey"`** — в каждом CSV `id` снова с 1. Скрипт `load_mock_data.py` перенумеровывает id (1..10000). Обновите скрипт и перезапустите `data-loader` или весь пайплайн.
+
 ## Задание (из методички)
 
 <details>

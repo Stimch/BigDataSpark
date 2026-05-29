@@ -9,6 +9,8 @@ POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "lab")
 CLICKHOUSE_HOST = os.environ.get("CLICKHOUSE_HOST", "clickhouse")
 CLICKHOUSE_PORT = os.environ.get("CLICKHOUSE_PORT", "8123")
 CLICKHOUSE_DB = os.environ.get("CLICKHOUSE_DB", "lab")
+CLICKHOUSE_USER = os.environ.get("CLICKHOUSE_USER", "default")
+CLICKHOUSE_PASSWORD = os.environ.get("CLICKHOUSE_PASSWORD", "lab")
 
 JDBC_POSTGRES_URL = (
     f"jdbc:postgresql://{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
@@ -24,8 +26,8 @@ POSTGRES_PROPERTIES = {
 }
 
 CLICKHOUSE_PROPERTIES = {
-    "user": os.environ.get("CLICKHOUSE_USER", "default"),
-    "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
+    "user": CLICKHOUSE_USER,
+    "password": CLICKHOUSE_PASSWORD,
     "driver": "com.clickhouse.jdbc.ClickHouseDriver",
 }
 
