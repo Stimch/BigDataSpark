@@ -96,15 +96,15 @@ def write_clickhouse(df, table: str) -> None:
 
 
 def execute_clickhouse(sql: str) -> None:
-    """Выполнить DDL/DML в ClickHouse через HTTP POST (GET для TRUNCATE даёт 500)."""
-    url = f"http://{CLICKHOUSE_HOST}:{CLICKHOUSE_PORT}/"
-    body = urllib.parse.urlencode(
-        {"database": CLICKHOUSE_DB, "query": sql}
-    ).encode("utf-8")
+    """Выполнить DDL/DML в ClickHouse: SQL в теле POST, database — в URL."""
+    url = (
+        f"http://{CLICKHOUSE_HOST}:{CLICKHOUSE_PORT}/"
+        f"?database={urllib.parse.quote(CLICKHOUSE_DB)}"
+    )
     credentials = base64.b64encode(
         f"{CLICKHOUSE_USER}:{CLICKHOUSE_PASSWORD}".encode("ascii")
     ).decode("ascii")
-    request = urllib.request.Request(url, data=body, method="POST")
+    request = urllib.request.Request(url, data=sql.encode("utf-8"), method="POST")
     request.add_header("Authorization", f"Basic {credentials}")
     try:
         with urllib.request.urlopen(request, timeout=120) as response:
