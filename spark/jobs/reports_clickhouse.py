@@ -77,11 +77,16 @@ def read_star_schema(spark: SparkSession):
     )
 
 
+def _table_name(table: str) -> str:
+    """Имя таблицы без префикса БД (db задаётся в URL и параметре database)."""
+    return table.rsplit(".", 1)[-1]
+
+
 def write_clickhouse(df, table: str) -> None:
     (
         df.write.format("jdbc")
         .option("url", JDBC_CLICKHOUSE_URL)
-        .option("dbtable", table)
+        .option("dbtable", _table_name(table))
         .mode("append")
         .options(**CLICKHOUSE_PROPERTIES)
         .save()
@@ -89,7 +94,8 @@ def write_clickhouse(df, table: str) -> None:
 
 
 def truncate_clickhouse_table(table: str) -> None:
-    sql = f"TRUNCATE TABLE IF EXISTS {table}"
+    # Не использовать lab.table при database=lab в URL — иначе HTTP 500.
+    sql = f"TRUNCATE TABLE IF EXISTS {_table_name(table)}"
     params = urllib.parse.urlencode(
         {
             "database": CLICKHOUSE_DB,
@@ -514,12 +520,12 @@ def build_quality_mart(sales):
 
 
 MART_BUILDERS = [
-    ("lab.mart_product_sales", build_product_mart),
-    ("lab.mart_customer_sales", build_customer_mart),
-    ("lab.mart_time_sales", build_time_mart),
-    ("lab.mart_store_sales", build_store_mart),
-    ("lab.mart_supplier_sales", build_supplier_mart),
-    ("lab.mart_product_quality", build_quality_mart),
+    ("mart_product_sales", build_product_mart),
+    ("mart_customer_sales", build_customer_mart),
+    ("mart_time_sales", build_time_mart),
+    ("mart_store_sales", build_store_mart),
+    ("mart_supplier_sales", build_supplier_mart),
+    ("mart_product_quality", build_quality_mart),
 ]
 
 
@@ -534,7 +540,7 @@ def main() -> None:
             truncate_clickhouse_table(table)
             mart_df = builder(sales)
             write_clickhouse(mart_df, table)
-            print(f"Loaded {mart_df.count()} rows into {table}")
+            print(f"Loaded {mart_df.count()} rows into {CLICKHOUSE_DB}.{table}")
 
         print("All ClickHouse marts built successfully")
     finally:
