@@ -19,10 +19,8 @@ from config import (
     CLICKHOUSE_DB,
     CLICKHOUSE_HOST,
     CLICKHOUSE_PASSWORD,
-    CLICKHOUSE_PROPERTIES,
     CLICKHOUSE_PORT,
     CLICKHOUSE_USER,
-    JDBC_CLICKHOUSE_URL,
     JDBC_POSTGRES_URL,
     POSTGRES_PROPERTIES,
     SPARK_JARS,
@@ -85,14 +83,32 @@ def _table_name(table: str) -> str:
 
 
 def write_clickhouse(df, table: str) -> None:
-    (
-        df.write.format("jdbc")
-        .option("url", JDBC_CLICKHOUSE_URL)
-        .option("dbtable", _table_name(table))
-        .mode("append")
-        .options(**CLICKHOUSE_PROPERTIES)
-        .save()
+    """Запись через HTTP JSONEachRow — JDBC Spark часто падает на UInt64/Nullable."""
+    name = _table_name(table)
+    rows = df.toJSON().collect()
+    if not rows:
+        return
+
+    payload = ("\n".join(rows) + "\n").encode("utf-8")
+    query = urllib.parse.quote(f"INSERT INTO {name} FORMAT JSONEachRow")
+    url = (
+        f"http://{CLICKHOUSE_HOST}:{CLICKHOUSE_PORT}/"
+        f"?database={urllib.parse.quote(CLICKHOUSE_DB)}&query={query}"
     )
+    credentials = base64.b64encode(
+        f"{CLICKHOUSE_USER}:{CLICKHOUSE_PASSWORD}".encode("ascii")
+    ).decode("ascii")
+    request = urllib.request.Request(url, data=payload, method="POST")
+    request.add_header("Authorization", f"Basic {credentials}")
+    try:
+        with urllib.request.urlopen(request, timeout=300) as response:
+            response.read()
+    except urllib.error.HTTPError as exc:
+        details = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"ClickHouse insert into {name} failed HTTP {exc.code}: "
+            f"{details.strip()}"
+        ) from exc
 
 
 def execute_clickhouse(sql: str) -> None:
